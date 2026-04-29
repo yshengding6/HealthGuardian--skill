@@ -1,0 +1,10 @@
+{
+  "id": "ep-2026-04-29-001",
+  "timestamp": "2026-04-29T12:00:00",
+  "event_type": "指标异常",
+  "situation": "睡眠不足导致次日血压升高",
+  "outcome": "补充休息后血压恢复正常",
+  "lesson": "睡眠不足会显著升高血压",
+  "related_pattern": null,
+  "confidence": 0.8
+}

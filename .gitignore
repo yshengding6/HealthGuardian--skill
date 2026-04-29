@@ -1,0 +1,26 @@
+# HealthGuardian - 用户数据（绝不可纳入版本控制）
+health_log.db
+dashboard.html
+
+# 体检报告原件（含个人隐私）
+reports/*.pdf
+reports/*_提取文本.txt
+
+# 记忆数据（含个人健康模式，仅保留示例模板）
+memory/health-patterns.json
+memory/episodic/*
+!memory/episodic/README.md
+!memory/episodic/**/ep-*-001.json
+
+# 备份和导出
+backups/
+exports/
+
+# 临时文件
+temp_images/
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/

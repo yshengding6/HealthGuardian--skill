@@ -1,0 +1,160 @@
+{
+  "health_thresholds": {
+    "blood_pressure": {
+      "name": "血压",
+      "unit": "mmHg",
+      "systolic": {
+        "green": {"min": 0, "max": 119, "label": "正常"},
+        "orange": {"min": 120, "max": 139, "label": "偏高"},
+        "red": {"min": 140, "max": 300, "label": "高血压"},
+        "critical": {"min": 160, "max": 300, "label": "严重高血压"}
+      },
+      "diastolic": {
+        "green": {"min": 0, "max": 79, "label": "正常"},
+        "orange": {"min": 80, "max": 89, "label": "偏高"},
+        "red": {"min": 90, "max": 200, "label": "高血压"},
+        "critical": {"min": 100, "max": 200, "label": "严重高血压"}
+      }
+    },
+    "blood_glucose": {
+      "name": "血糖",
+      "unit": "mmol/L",
+      "fasting": {
+        "green": {"min": 3.9, "max": 5.5, "label": "正常"},
+        "orange": {"min": 5.6, "max": 6.9, "label": "糖尿病前期"},
+        "red": {"min": 7.0, "max": 15.0, "label": "糖尿病范围"},
+        "critical": {"min": 11.1, "max": 30.0, "label": "严重高血糖"}
+      },
+      "post_meal_2h": {
+        "green": {"min": 3.9, "max": 7.7, "label": "正常"},
+        "orange": {"min": 7.8, "max": 11.0, "label": "糖耐量异常"},
+        "red": {"min": 11.1, "max": 20.0, "label": "糖尿病范围"}
+      }
+    },
+    "heart_rate": {
+      "name": "心率",
+      "unit": "bpm",
+      "resting": {
+        "green": {"min": 60, "max": 100, "label": "正常"},
+        "orange_low": {"min": 50, "max": 59, "label": "偏低"},
+        "orange_high": {"min": 101, "max": 110, "label": "偏高"},
+        "red_low": {"min": 0, "max": 49, "label": "过低"},
+        "red_high": {"min": 111, "max": 200, "label": "过高"}
+      }
+    },
+    "blood_lipids": {
+      "name": "血脂",
+      "unit": "mmol/L",
+      "total_cholesterol": {
+        "green": {"min": 0, "max": 5.17, "label": "正常"},
+        "orange": {"min": 5.18, "max": 6.19, "label": "偏高"},
+        "red": {"min": 6.20, "max": 15.0, "label": "高胆固醇"}
+      },
+      "triglycerides": {
+        "green": {"min": 0, "max": 1.69, "label": "正常"},
+        "orange": {"min": 1.70, "max": 2.25, "label": "偏高"},
+        "red": {"min": 2.26, "max": 20.0, "label": "高甘油三酯"}
+      },
+      "ldl_cholesterol": {
+        "green": {"min": 0, "max": 3.36, "label": "正常"},
+        "orange": {"min": 3.37, "max": 4.12, "label": "偏高"},
+        "red": {"min": 4.13, "max": 15.0, "label": "高LDL胆固醇"}
+      },
+      "hdl_cholesterol": {
+        "green": {"min": 1.04, "max": 10.0, "label": "正常"},
+        "orange": {"min": 0.9, "max": 1.03, "label": "偏低"},
+        "red": {"min": 0, "max": 0.89, "label": "过低"}
+      }
+    },
+    "blood_routine": {
+      "name": "血常规",
+      "unit": "10^9/L",
+      "white_blood_cells": {
+        "green": {"min": 4.0, "max": 10.0, "label": "正常"},
+        "orange_low": {"min": 3.0, "max": 3.9, "label": "偏低"},
+        "orange_high": {"min": 10.1, "max": 12.0, "label": "偏高"},
+        "red_low": {"min": 0, "max": 2.9, "label": "过低"},
+        "red_high": {"min": 12.1, "max": 50.0, "label": "过高"}
+      },
+      "red_blood_cells": {
+        "male": {"green": {"min": 4.0, "max": 5.5, "label": "正常"}},
+        "female": {"green": {"min": 3.5, "max": 5.0, "label": "正常"}}
+      },
+      "hemoglobin": {
+        "male": {"green": {"min": 120, "max": 160, "label": "正常"}},
+        "female": {"green": {"min": 110, "max": 150, "label": "正常"}}
+      },
+      "platelets": {
+        "green": {"min": 100, "max": 300, "label": "正常"},
+        "orange_low": {"min": 80, "max": 99, "label": "偏低"},
+        "orange_high": {"min": 301, "max": 400, "label": "偏高"},
+        "red_low": {"min": 0, "max": 79, "label": "过低"},
+        "red_high": {"min": 401, "max": 1000, "label": "过高"}
+      }
+    },
+    "liver_function": {
+      "name": "肝功能",
+      "unit": "U/L",
+      "alt": {
+        "green": {"min": 0, "max": 40, "label": "正常"},
+        "orange": {"min": 41, "max": 80, "label": "轻度升高"},
+        "red": {"min": 81, "max": 500, "label": "中重度升高"}
+      },
+      "ast": {
+        "green": {"min": 0, "max": 40, "label": "正常"},
+        "orange": {"min": 41, "max": 80, "label": "轻度升高"},
+        "red": {"min": 81, "max": 500, "label": "中重度升高"}
+      }
+    },
+    "kidney_function": {
+      "name": "肾功能",
+      "unit": "μmol/L",
+      "creatinine": {
+        "male": {"green": {"min": 50, "max": 110, "label": "正常"}},
+        "female": {"green": {"min": 40, "max": 100, "label": "正常"}}
+      },
+      "urea": {
+        "green": {"min": 2.5, "max": 7.1, "label": "正常"},
+        "orange": {"min": 7.2, "max": 10.0, "label": "偏高"},
+        "red": {"min": 10.1, "max": 30.0, "label": "过高"}
+      }
+    },
+    "sleep_quality": {
+      "name": "睡眠质量",
+      "unit": "小时",
+      "duration": {
+        "green": {"min": 7.0, "max": 9.0, "label": "健康"},
+        "orange_low": {"min": 6.0, "max": 6.9, "label": "略少"},
+        "orange_high": {"min": 9.1, "max": 10.0, "label": "略多"},
+        "red_low": {"min": 0, "max": 5.9, "label": "不足"},
+        "red_high": {"min": 10.1, "max": 15.0, "label": "过多"}
+      }
+    },
+    "physical_activity": {
+      "name": "运动量",
+      "unit": "步数",
+      "daily_steps": {
+        "green": {"min": 8000, "max": 20000, "label": "优秀"},
+        "orange": {"min": 5000, "max": 7999, "label": "一般"},
+        "red": {"min": 0, "max": 4999, "label": "不足"}
+      }
+    }
+  },
+  "alert_rules": {
+    "continuous_abnormal_days": 7,
+    "critical_immediate_alert": true,
+    "orange_summary_days": 3,
+    "severity_mapping": {
+      "green": "无",
+      "orange": "轻微",
+      "red": "中度",
+      "critical": "严重"
+    }
+  },
+  "weekly_report_config": {
+    "include_trends": true,
+    "compare_previous_week": true,
+    "highlight_changes": true,
+    "min_records_for_trend": 3
+  }
+}
