@@ -16,7 +16,7 @@ import re
 # ============================================================
 # Schema 版本管理
 # ============================================================
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 
 # ============================================================
@@ -66,6 +66,9 @@ class Medication:
     start_date: str                 # 开始服用日期
     dose_quantity: float = 1.0      # 每次服用片数（默认1片）
     notes: Optional[str] = None     # 备注
+    med_type: str = '长期'          # 药物类型：长期/阶段性/临时处方
+    schedule_time: str = '早'       # 服药时段：早/中/晚/睡前，多选用逗号分隔
+    end_date: Optional[str] = None  # 疗程结束日期（阶段性/临时处方用）
 
 
 @dataclass
@@ -78,6 +81,7 @@ class MedicationLog:
     dosage_taken: str = ''          # 实际服用的剂量
     is_on_time: Optional[int] = 1   # 是否按时（1=是, 0=否）
     notes: Optional[str] = None     # 备注
+    schedule_slot: Optional[str] = None  # 服药时段：早/中/晚/睡前
 
 
 @dataclass
@@ -159,7 +163,7 @@ def parse_frequency(frequency: str) -> float:
 # ============================================================
 
 class DatabaseManager:
-    """HealthGuardian 数据库管理类 v2"""
+    """HealthGuardian 数据库管理类 v3"""
 
     def __init__(self, db_path: str = "health_log.db"):
         """
@@ -381,6 +385,36 @@ class DatabaseManager:
             conn.commit()
             print(f"  数据库迁移: v3 -> v4 (medications.dose_quantity)")
 
+        if current < 5:
+            # v4→v5: medications 表增加 med_type/schedule_time/end_date 列
+            cursor.execute("PRAGMA table_info(medications)")
+            columns = [row['name'] for row in cursor.fetchall()]
+            if 'med_type' not in columns:
+                cursor.execute(
+                    "ALTER TABLE medications ADD COLUMN med_type TEXT DEFAULT '长期'"
+                )
+            if 'schedule_time' not in columns:
+                cursor.execute(
+                    "ALTER TABLE medications ADD COLUMN schedule_time TEXT DEFAULT '早'"
+                )
+            if 'end_date' not in columns:
+                cursor.execute(
+                    "ALTER TABLE medications ADD COLUMN end_date TEXT"
+                )
+            conn.commit()
+            print(f"  数据库迁移: v4 -> v5 (medications.med_type/schedule_time/end_date)")
+
+        if current < 6:
+            # v5→v6: medication_logs 表增加 schedule_slot 列（服药时段）
+            cursor.execute("PRAGMA table_info(medication_logs)")
+            columns = [row['name'] for row in cursor.fetchall()]
+            if 'schedule_slot' not in columns:
+                cursor.execute(
+                    "ALTER TABLE medication_logs ADD COLUMN schedule_slot TEXT"
+                )
+            conn.commit()
+            print(f"  数据库迁移: v5 -> v6 (medication_logs.schedule_slot)")
+
         if current < SCHEMA_VERSION:
             self._set_schema_version(SCHEMA_VERSION)
             print(f"  数据库迁移完成，当前版本: v{SCHEMA_VERSION}")
@@ -392,21 +426,54 @@ class DatabaseManager:
     # ========== 每日健康指标操作 ==========
 
     def add_daily_metric(self, metric: DailyMetric) -> int:
-        """新增每日健康指标（同一天自动覆盖）"""
+        """新增每日健康指标（同一天只更新非 NULL 字段，保留已有数据）"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO daily_metrics
-            (date, systolic_bp, diastolic_bp, heart_rate, fasting_glucose,
-             sleep_hours, sleep_quality, steps, notes, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, (
-            metric.date, metric.systolic_bp, metric.diastolic_bp,
-            metric.heart_rate, metric.fasting_glucose,
-            metric.sleep_hours, metric.sleep_quality, metric.steps, metric.notes
-        ))
-        conn.commit()
-        return cursor.lastrowid
+
+        # 先检查当天是否已有记录
+        cursor.execute("SELECT id FROM daily_metrics WHERE date = ?", (metric.date,))
+        existing = cursor.fetchone()
+
+        if existing:
+            # 逐字段更新：只覆盖非 NULL 的新值，保留已有数据
+            updates = []
+            values = []
+            field_map = {
+                'systolic_bp': metric.systolic_bp,
+                'diastolic_bp': metric.diastolic_bp,
+                'heart_rate': metric.heart_rate,
+                'fasting_glucose': metric.fasting_glucose,
+                'sleep_hours': metric.sleep_hours,
+                'sleep_quality': metric.sleep_quality,
+                'steps': metric.steps,
+                'notes': metric.notes,
+            }
+            for field, value in field_map.items():
+                if value is not None:
+                    updates.append(f"{field} = ?")
+                    values.append(value)
+            if updates:
+                updates.append("updated_at = CURRENT_TIMESTAMP")
+                values.append(metric.date)
+                cursor.execute(
+                    f"UPDATE daily_metrics SET {', '.join(updates)} WHERE date = ?",
+                    values
+                )
+            conn.commit()
+            return existing['id']
+        else:
+            cursor.execute("""
+                INSERT INTO daily_metrics
+                (date, systolic_bp, diastolic_bp, heart_rate, fasting_glucose,
+                 sleep_hours, sleep_quality, steps, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                metric.date, metric.systolic_bp, metric.diastolic_bp,
+                metric.heart_rate, metric.fasting_glucose,
+                metric.sleep_hours, metric.sleep_quality, metric.steps, metric.notes
+            ))
+            conn.commit()
+            return cursor.lastrowid
 
     def get_daily_metric(self, date: str) -> Optional[DailyMetric]:
         """取得指定日期的健康指标"""
@@ -559,13 +626,15 @@ class DatabaseManager:
         cursor.execute("""
             INSERT INTO medications
             (name, dosage, frequency, total_quantity, remaining_quantity,
-             expiry_date, start_date, dose_quantity, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             expiry_date, start_date, dose_quantity, notes,
+             med_type, schedule_time, end_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             medication.name, medication.dosage, medication.frequency,
             medication.total_quantity, medication.remaining_quantity,
             medication.expiry_date, medication.start_date,
-            medication.dose_quantity, medication.notes
+            medication.dose_quantity, medication.notes,
+            medication.med_type, medication.schedule_time, medication.end_date
         ))
         conn.commit()
         return cursor.lastrowid
@@ -607,27 +676,32 @@ class DatabaseManager:
         记录一次服药
 
         同时自动扣减药品库存（根据 dose_quantity 动态扣减）
+        验证 medication_id 存在，不存在则抛出 ValueError
         """
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        # 读取该药品的每次服用片数
+        # 验证药品存在
         cursor.execute(
-            "SELECT dose_quantity FROM medications WHERE id = ?",
+            "SELECT id, dose_quantity FROM medications WHERE id = ?",
             (med_log.medication_id,)
         )
         row = cursor.fetchone()
-        dose_qty = row['dose_quantity'] if row else 1.0
+        if not row:
+            raise ValueError(f"药品 ID {med_log.medication_id} 不存在，无法记录服药")
+        dose_qty = row['dose_quantity'] or 1.0
 
-        # 插入服药记录
+        # 插入服药记录（含 schedule_slot）
         cursor.execute("""
             INSERT INTO medication_logs
-            (medication_id, date, time, dosage_taken, is_on_time, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (medication_id, date, time, dosage_taken, is_on_time, notes, schedule_slot)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             med_log.medication_id, med_log.date, med_log.time,
-            med_log.dosage_taken, med_log.is_on_time, med_log.notes
+            med_log.dosage_taken, med_log.is_on_time, med_log.notes,
+            med_log.schedule_slot
         ))
+        log_id = cursor.lastrowid
 
         # 自动扣减库存（按实际每次服用片数）
         cursor.execute("""
@@ -645,7 +719,7 @@ class DatabaseManager:
         """, (med_log.medication_id,))
 
         conn.commit()
-        return cursor.lastrowid
+        return log_id
 
     def get_medication_logs(self, medication_id: Optional[int] = None,
                             days: int = 30) -> List[Dict]:
@@ -714,32 +788,47 @@ class DatabaseManager:
             actual_doses += row['doses']
             on_time_doses += row['on_time'] or 0
 
-        expected = int(days * daily_dose)
+        # 计算预期剂量：考虑 start_date 和 end_date
+        start = datetime.strptime(med['start_date'], '%Y-%m-%d')
+        now = datetime.now()
+        lookback_start = now - timedelta(days=days)
+        # 有效计算起始日 = max(lookback起点, start_date)
+        effective_start = max(start, lookback_start)
+        # 有效计算终止日 = min(今天, end_date 或 今天)
+        end_date_str = med.get('end_date') if hasattr(med, 'get') else None
+        # 从 dict 兼容取值
+        try:
+            end_date_str = med['end_date']
+        except (KeyError, TypeError):
+            end_date_str = None
+        if end_date_str:
+            effective_end = min(now, datetime.strptime(end_date_str, '%Y-%m-%d'))
+        else:
+            effective_end = now
+        effective_days = max(1, (effective_end - effective_start).days + 1)
+        expected = int(effective_days * daily_dose)
+
         rate = round(actual_doses / expected * 100, 1) if expected > 0 else 0
         on_time_rate = round(on_time_doses / actual_doses * 100, 1) if actual_doses > 0 else 0
 
-        # 计算漏服日期（只在开始日期之后）
-        start = datetime.strptime(med['start_date'], '%Y-%m-%d')
-        cutoff = (start if start > datetime.now() - timedelta(days=days)
-                  else datetime.now() - timedelta(days=days))
+        # 计算漏服日期（只在有效区间内）
         missed = []
-        check = cutoff
-        while check <= datetime.now():
+        check = effective_start
+        while check <= effective_end:
             if check.strftime('%Y-%m-%d') not in actual_dates:
                 missed.append(check.strftime('%Y-%m-%d'))
             check += timedelta(days=1)
-        # 只返回最近 days 天的漏服
-        missed = missed[-days:]
 
         return {
             'medication_name': med['name'],
             'period_days': days,
+            'effective_days': effective_days,
             'expected_doses': expected,
             'actual_doses': actual_doses,
             'on_time_doses': on_time_doses,
             'adherence_rate': rate,
             'on_time_rate': on_time_rate,
-            'missed_dates': missed[-10:],  # 最多返回10个
+            'missed_dates': missed[-10:],
         }
 
     def check_missed_medications(self) -> List[Dict]:
@@ -811,19 +900,251 @@ class DatabaseManager:
         return alerts
 
     def check_expired_medications(self) -> List[Dict]:
-        """检查已过期或即将过期（30天内）"""
+        """检查已过期或即将过期（30天内），区分两种状态"""
         conn = self._get_connection()
         cursor = conn.cursor()
+        results = []
+        # 已过期
+        cursor.execute("""
+            SELECT name, expiry_date, remaining_quantity
+            FROM medications
+            WHERE is_active = 1 AND expiry_date < date('now','localtime')
+            ORDER BY expiry_date ASC
+        """)
+        for row in cursor.fetchall():
+            results.append({'name': row['name'], 'expiry_date': row['expiry_date'],
+                            'remaining': row['remaining_quantity'], 'status': '已过期'})
+        # 即将过期（30天内）
         cursor.execute("""
             SELECT name, expiry_date, remaining_quantity
             FROM medications
             WHERE is_active = 1
-            AND (expiry_date < date('now','localtime')
-                 OR expiry_date <= date('now','localtime','+30 days'))
+            AND expiry_date >= date('now','localtime')
+            AND expiry_date <= date('now','localtime','+30 days')
             ORDER BY expiry_date ASC
         """)
-        return [{'name': row['name'], 'expiry_date': row['expiry_date'],
-                 'remaining': row['remaining_quantity']} for row in cursor.fetchall()]
+        for row in cursor.fetchall():
+            results.append({'name': row['name'], 'expiry_date': row['expiry_date'],
+                            'remaining': row['remaining_quantity'], 'status': '即将过期'})
+        return results
+
+    # ========== 每日用药清单与完整性检查 ==========
+
+    def get_daily_med_checklist(self, date: str = None) -> Dict:
+        """
+        获取指定日期的用药清单（含服用状态）
+
+        多时段药物（如"早,晚"）拆分为独立条目，每个时段一条
+        按 schedule_slot 分组排序（早→中→晚→睡前）
+
+        Returns:
+            {
+                "date": "2026-05-17",
+                "total": 5,
+                "completed": 3,
+                "completion_rate": 60.0,
+                "checklist": [...],
+                "missing": [...]
+            }
+        """
+        if date is None:
+            date = datetime.now().strftime('%Y-%m-%d')
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # 获取所有活跃药物
+        cursor.execute("""
+            SELECT id, name, dosage, frequency, remaining_quantity,
+                   med_type, schedule_time, end_date, dose_quantity
+            FROM medications
+            WHERE is_active = 1
+            ORDER BY name ASC
+        """)
+        active_meds = [dict(row) for row in cursor.fetchall()]
+
+        # 过滤：阶段性/临时处方已过 end_date 的排除
+        filtered_meds = []
+        for med in active_meds:
+            if med['med_type'] in ('阶段性', '临时处方') and med['end_date']:
+                if med['end_date'] < date:
+                    continue
+            filtered_meds.append(med)
+
+        # 获取指定日期所有服药记录（含 schedule_slot）
+        cursor.execute("""
+            SELECT medication_id, time, dosage_taken, is_on_time, schedule_slot
+            FROM medication_logs
+            WHERE date = ?
+        """, (date,))
+        logs = [dict(row) for row in cursor.fetchall()]
+
+        # 按 (medication_id, schedule_slot) 建索引
+        log_index = {}
+        for log in logs:
+            key = (log['medication_id'], log['schedule_slot'])
+            log_index[key] = log
+
+        SCHEDULE_ORDER = {'早': 0, '中': 1, '晚': 2, '睡前': 3}
+        checklist = []
+        completed = 0
+
+        for med in filtered_meds:
+            schedule_raw = (med['schedule_time'] or '早').strip()
+            schedule_parts = [s.strip() for s in schedule_raw.split(',') if s.strip()]
+            if not schedule_parts:
+                schedule_parts = ['早']
+
+            for slot in schedule_parts:
+                key = (med['id'], slot)
+                log_entry = log_index.get(key)
+
+                if log_entry:
+                    status = '已服'
+                    log_time = log_entry['time']
+                else:
+                    # 也检查无 schedule_slot 的旧记录（向后兼容）
+                    legacy_key = (med['id'], None)
+                    legacy_entry = log_index.get(legacy_key)
+                    if legacy_entry and len(schedule_parts) == 1:
+                        status = '已服'
+                        log_time = legacy_entry['time']
+                    else:
+                        status = '未服'
+                        log_time = None
+
+                if status == '已服':
+                    completed += 1
+
+                checklist.append({
+                    'medication_id': med['id'],
+                    'name': med['name'],
+                    'dosage': med['dosage'],
+                    'med_type': med['med_type'] or '长期',
+                    'schedule_time': schedule_raw,
+                    'schedule_slot': slot,
+                    'status': status,
+                    'log_time': log_time,
+                    'remaining': med['remaining_quantity'],
+                    'frequency': med['frequency'],
+                })
+
+        # 按 schedule_slot 排序
+        checklist.sort(key=lambda x: (SCHEDULE_ORDER.get(x['schedule_slot'], 99), x['name']))
+
+        total = len(checklist)
+        rate = round(completed / total * 100, 1) if total > 0 else 0
+        missing = [c for c in checklist if c['status'] != '已服']
+
+        return {
+            'date': date,
+            'total': total,
+            'completed': completed,
+            'completion_rate': rate,
+            'checklist': checklist,
+            'missing': missing,
+        }
+
+    def check_medication_completeness(self, date: str = None) -> Dict:
+        """
+        检查当日药物记录完整性，返回提醒信息
+
+        用于"记录服药后"的自动补全提示
+        """
+        if date is None:
+            date = datetime.now().strftime('%Y-%m-%d')
+
+        checklist = self.get_daily_med_checklist(date)
+        missing = checklist['missing']
+
+        if not missing:
+            return {
+                'is_complete': True,
+                'message': f'今日({date})药物已全部记录',
+                'completion_rate': checklist['completion_rate'],
+                'missing': [],
+            }
+
+        # 按 schedule_slot 分组提示
+        by_schedule = {}
+        for m in missing:
+            slot = m['schedule_slot']
+            if slot not in by_schedule:
+                by_schedule[slot] = []
+            by_schedule[slot].append(f"{m['name']}({m['dosage']})")
+
+        parts = []
+        for schedule in ['早', '中', '晚', '睡前']:
+            if schedule in by_schedule:
+                parts.append(f"{schedule}: {', '.join(by_schedule[schedule])}")
+
+        message = f"今日({date})还有以下药物未记录 —— {'; '.join(parts)}，是否已服用？"
+
+        return {
+            'is_complete': False,
+            'message': message,
+            'completion_rate': checklist['completion_rate'],
+            'missing': missing,
+        }
+
+    def batch_log_medications(self, date: str, time: str,
+                               schedule_slot: str,
+                               medication_ids: List[int],
+                               is_on_time: int = 1,
+                               notes: str = '') -> List[int]:
+        """
+        批量记录多种药物的服用
+
+        用于"早上药都吃了"等场景，一键标记指定时段所有药物
+        按 schedule_slot 区分，多时段药物每个时段单独记录
+
+        Args:
+            date: 服药日期
+            time: 服药时间
+            schedule_slot: 服药时段（早/中/晚/睡前）
+            medication_ids: 药品ID列表
+            is_on_time: 是否按时
+            notes: 备注
+
+        Returns:
+            各药物的 log ID 列表
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        log_ids = []
+
+        for med_id in medication_ids:
+            # 获取药品信息
+            cursor.execute(
+                "SELECT name, dosage, dose_quantity FROM medications WHERE id = ?",
+                (med_id,)
+            )
+            med = cursor.fetchone()
+            if not med:
+                continue
+
+            # 检查该药该时段是否已记录（按时段区分，避免多时段药物被跳过）
+            cursor.execute(
+                "SELECT id FROM medication_logs WHERE medication_id = ? AND date = ? AND (schedule_slot = ? OR schedule_slot IS NULL)",
+                (med_id, date, schedule_slot)
+            )
+            if cursor.fetchone():
+                continue  # 该时段已记录，跳过
+
+            log = MedicationLog(
+                id=None,
+                medication_id=med_id,
+                date=date,
+                time=time,
+                dosage_taken=med['dosage'],
+                is_on_time=is_on_time,
+                notes=notes,
+                schedule_slot=schedule_slot,
+            )
+            log_id = self.log_medication(log)
+            log_ids.append(log_id)
+
+        return log_ids
 
     # ========== 健康日记/症状日志 ==========
 
@@ -997,22 +1318,32 @@ class DatabaseManager:
 
     def _check_range(self, value: float, range_config: Dict) -> Tuple[str, str]:
         """
-        根据阈值配置判断值所属级别
+        根据阈值配置判断值所属级别（返回最严重级别）
 
-        支持 orange_low/orange_high 等双方向键名，自动规范化为基础级别
+        当多个区间重叠时（如 red 140-300 与 critical 160-300），
+        返回最严重的那个级别
 
         Returns:
-            (level_key, label) 如 ('orange', '偏高')
+            (level_key, label) 如 ('critical', '严重高血压')
         """
+        SEVERITY_ORDER = {'green': 0, 'orange': 1, 'red': 2, 'critical': 3}
+        best_key = 'green'
+        best_label = '正常'
+        best_severity = 0
+
         for key, cfg in range_config.items():
             if isinstance(cfg, dict) and 'min' in cfg and 'max' in cfg:
                 if cfg['min'] <= value <= cfg['max']:
-                    # 规范化：orange_high → orange, red_low → red, critical → critical
                     base_key = key.split('_')[0] if '_' in key else key
                     if base_key not in ('green', 'orange', 'red', 'critical'):
-                        base_key = key  # 非标准键名保留原值
-                    return base_key, cfg.get('label', key)
-        return 'green', '正常'
+                        base_key = key
+                    severity = SEVERITY_ORDER.get(base_key, 0)
+                    if severity > best_severity:
+                        best_severity = severity
+                        best_key = base_key
+                        best_label = cfg.get('label', key)
+
+        return best_key, best_label
 
     # ========== 统计趋势 ==========
 
@@ -1242,6 +1573,7 @@ class DatabaseManager:
             'alerts': [{'item': a.item, 'level': a.level, 'message': a.message} for a in alerts],
             'medication_alerts': self.check_low_stock_medications() + self.check_expired_medications(),
             'missed_medications': self.check_missed_medications(),
+            'medication_completeness': self.check_medication_completeness(today),
             'overdue_followups': self.get_overdue_follow_ups(),
             'insights': [
                 {'category': i.category, 'title': i.title,
@@ -1404,6 +1736,22 @@ if __name__ == "__main__":
                 print(f"  {adherence['medication_name']}: "
                       f"依从率 {adherence['adherence_rate']}%, "
                       f"按时率 {adherence['on_time_rate']}%")
+
+        # 4. 每日用药清单
+        print("\n--- 每日用药清单 ---")
+        checklist = db.get_daily_med_checklist()
+        print(f"  日期: {checklist['date']}")
+        print(f"  完成率: {checklist['completion_rate']}% ({checklist['completed']}/{checklist['total']})")
+        for item in checklist['checklist']:
+            status_icon = {'已服': '✓', '未服': '✗', '部分': '◐'}.get(item['status'], '?')
+            print(f"  {status_icon} {item['name']} [{item['schedule_time']}] {item['status']} {item.get('log_time', '')}")
+
+        # 5. 药物完整性检查
+        print("\n--- 药物完整性检查 ---")
+        completeness = db.check_medication_completeness()
+        print(f"  完整: {'是' if completeness['is_complete'] else '否'}")
+        if not completeness['is_complete']:
+            print(f"  提示: {completeness['message']}")
 
     print("\n" + "=" * 50)
     print("测试完成！")
