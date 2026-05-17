@@ -244,7 +244,7 @@
 # 写入脚本文件
 script_content = '''
 import sys
-sys.path.insert(0, "C:/Users/老丁的电脑/.workbuddy/skills/HealthGuardian")
+sys.path.insert(0, "~/.workbuddy/skills/HealthGuardian")
 from db_manager import DatabaseManager, DailyMetric
 
 db = DatabaseManager("health_log.db")
@@ -269,23 +269,23 @@ print(f"昨日未记录: {check['yesterday_missing']}")
 print(f"漏服药品: {len(check['missed_medications'])}种")
 db.close()
 '''
-with open("C:/Users/老丁的电脑/.workbuddy/skills/HealthGuardian/_temp_hg.py", "w", encoding="utf-8") as f:
+with open("~/.workbuddy/skills/HealthGuardian/_temp_hg.py", "w", encoding="utf-8") as f:
     f.write(script_content)
 ```
 
 ```powershell
 # 执行脚本（不弹出窗口，结果输出到文件）
-Start-Process -FilePath "C:\Program Files\Python313\python.exe" `
-    -ArgumentList "C:\Users\老丁的电脑\.workbuddy\skills\HealthGuardian\_temp_hg.py" `
+Start-Process -FilePath "python.exe" `
+    -ArgumentList "~/.workbuddy/skills/HealthGuardian/_temp_hg.py" `
     -NoNewWindow -Wait `
-    -RedirectStandardOutput "C:\Users\老丁的电脑\.workbuddy\skills\HealthGuardian\_out.txt" `
-    -RedirectStandardError "C:\Users\老丁的电脑\.workbuddy\skills\HealthGuardian\_err.txt" `
-    -WorkingDirectory "C:\Users\老丁的电脑\.workbuddy\skills\HealthGuardian"
+    -RedirectStandardOutput "~/.workbuddy/skills/HealthGuardian/_out.txt" `
+    -RedirectStandardError "~/.workbuddy/skills/HealthGuardian/_err.txt" `
+    -WorkingDirectory "~/.workbuddy/skills/HealthGuardian"
 ```
 
 ```python
 # 读取输出
-with open("C:/Users/老丁的电脑/.workbuddy/skills/HealthGuardian/_out.txt", "r", encoding="utf-8") as f:
+with open("~/.workbuddy/skills/HealthGuardian/_out.txt", "r", encoding="utf-8") as f:
     print(f.read())
 ```
 
@@ -301,7 +301,7 @@ fasting_glucose, sleep_hours, sleep_quality, steps, notes
 ```
 id, medication_id, date, time, dosage_taken, is_on_time, notes, schedule_slot
 ```
-- medication_id=1 对应"施惠达"
+- medication_id=1 对应"示例降压药"
 - is_on_time=1 表示按时，0 表示迟到
 - schedule_slot=该次记录对应的服药时段（早/中/晚/睡前），v6新增
 
@@ -345,7 +345,7 @@ if not completeness['is_complete']:
 log_ids = db.batch_log_medications(
     date="2026-05-17", time="06:30",
     schedule_slot="早",  # 指定时段
-    medication_ids=[1, 7]  # 施惠达、碳酸钙D3
+    medication_ids=[1, 7]  # 示例降压药、示例补钙药
 )
 # 自动跳过该时段已记录的药物
 ```
