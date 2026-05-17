@@ -1,162 +1,153 @@
-# HealthGuardian-Skill
+# HealthGuardian v3
 
-個人健康守護者 - 一個基於 OpenClaw 架構的 AI 健康管理系統
+个人健康守护者 - 基于 SQLite + 多记忆架构 + AI 的个人健康自进化智能体
 
-## 專案概覽
+## 功能概览
 
-HealthGuardian-Skill 是一個整合化的個人健康管理系統，利用 Claude Code 的 AI 能力實現：
+| 模块 | 功能 | 版本 |
+|------|------|------|
+| **VitalsTracker** | 记录每日血压、血糖、心率、睡眠、步数，自动预警 | v1 |
+| **HealthDiary** | 健康日记/症状日志，与指标数据分离 | v1 |
+| **MedReportAnalyzer** | 解析体检报告（图片 OCR + PDF 文本提取） | v1 |
+| **MedTracker** | 药品闭环管理、用药清单制、完整性检查、批量记录 | v3 |
+| **HealthConsultant** | 健康分析与预警（9 大品类阈值） | v1 |
+| **InsightEngine** | 跨表关联分析（药效-指标/症状-指标/体检趋势） | v2 |
+| **FollowUpTracker** | 就医待办/复查计划、过期预警 | v1 |
+| **MemoryManager** | 三层记忆架构（语义/情景/规则）、经验自动提取 | v2 |
+| **DailyCheck** | 每日健康巡检一键汇总 | v2 |
+| **Dashboard** | 固定三区布局 HTML 仪表盘 | v3 |
 
-- 自動記錄與追蹤每日健康指標
-- 智能解析體檢報告與處方單
-- 藥品管理與用藥提醒
-- 健康趨勢分析與預警
-
-## 系統架構
-
-### 四大功能模組
-
-| 模組名稱 | 功能描述 | 技術實現 |
-|---------|---------|---------|
-| **VitalsTracker** | 記錄每日血壓、血糖、心率、睡眠及運動情況 | SQLite 本地資料庫 + 自然語言解析 |
-| **MedReportAnalyzer** | 解析體檢報告、處方單照片 | Claude Vision API + OCR |
-| **MedReminder** | 藥品管理與用藥提醒 | 資料庫 + Cron Job 定時任務 |
-| **HealthConsultant** | 綜合分析與趨勢預警 | 數據分析引擎 + 預警規則 |
-
-## 專案結構
+## 项目结构
 
 ```
 HealthGuardian-Skill/
-├── db_manager.py           # 資料庫管理模組 (已完成)
-├── vitals_tracker.py       # 生命指標追蹤器 (待開發)
-├── med_report_analyzer.py # 體檢報告解析器 (待開發)
-├── med_reminder.py         # 藥品提醒器 (待開發)
-├── health_consultant.py    # 健康顧問 (待開發)
-├── prompts/                # 提示詞模板目錄
-│   └── ocr_template.txt    # OCR 識別提示詞
-├── config/                 # 配置文件
-│   └── thresholds.json     # 預警閾值配置
-└── health_log.db           # SQLite 資料庫 (自動生成)
+├── db_manager.py           # 数据库管理核心模块 v3 (Schema v6)
+├── dashboard.py            # 固定格式健康仪表盘 v3
+├── memory_manager.py       # 记忆管理模块 (三层记忆架构)
+├── med_report_analyzer.py  # 图片体检报告解析 (PIL + AI Vision)
+├── pdf_report_parser.py    # PDF 体检报告解析 (PyMuPDF)
+├── import_records.py       # 历史数据导入工具
+├── SKILL.md                # Skill 完整文档
+├── config/
+│   └── thresholds.json     # 预警阈值配置 (9 大品类)
+├── prompts/
+│   └── ocr_template.txt    # OCR 识别提示词模板
+├── memory/
+│   ├── health-patterns.example.json  # 语义记忆模板
+│   └── episodic/                     # 情景记忆目录
+└── reports/
+    └── 健康档案汇总.md      # 健康档案模板
 ```
 
-## 資料庫架構
+## 数据库架构 (Schema v6)
 
-### daily_metrics - 每日健康指標表
+9 张表，版本化自动迁移：
 
-| 欄位 | 類型 | 說明 |
-|------|------|------|
-| id | INTEGER | 主鍵 |
-| date | TEXT | 日期 (YYYY-MM-DD) |
-| systolic_bp | INTEGER | 收縮壓 (mmHg) |
-| diastolic_bp | INTEGER | 舒張壓 (mmHg) |
-| heart_rate | INTEGER | 心率 (bpm) |
-| fasting_glucose | REAL | 空腹血糖 (mmol/L) |
-| sleep_hours | REAL | 睡眠時數 |
-| sleep_quality | INTEGER | 睡眠品質 (1-5) |
-| steps | INTEGER | 步數 |
-| notes | TEXT | 備註 |
+| 表名 | 用途 |
+|------|------|
+| `daily_metrics` | 每日数值指标（血压/血糖/心率/睡眠/步数） |
+| `health_logs` | 健康日记/症状日志 |
+| `medical_records` | 体检报告异常项 |
+| `medications` | 药品管理（含类型/时段/疗程截止） |
+| `medication_logs` | 服药记录（含时段 slot） |
+| `lifestyle` | 生活习惯档案 |
+| `medical_history` | 病史记录 |
+| `follow_up_actions` | 就医待办/复查计划 |
+| `_meta` | Schema 版本元数据 |
 
-### medical_records - 體檢報告異常項表
+## 快速开始
 
-| 欄位 | 類型 | 說明 |
-|------|------|------|
-| id | INTEGER | 主鍵 |
-| report_date | TEXT | 報告日期 |
-| report_type | TEXT | 報告類型 |
-| item_name | TEXT | 檢查項目名稱 |
-| value | TEXT | 數值 |
-| unit | TEXT | 單位 |
-| reference_range | TEXT | 參考範圍 |
-| status | TEXT | 狀態 (正常/偏高/偏低) |
-| severity | TEXT | 嚴重程度 |
-| notes | TEXT | 備註 |
+### 安装依赖
 
-### medications - 藥品管理表
+```bash
+pip install Pillow PyMuPDF
+```
 
-| 欄位 | 類型 | 說明 |
-|------|------|------|
-| id | INTEGER | 主鍵 |
-| name | TEXT | 藥品名稱 |
-| dosage | TEXT | 劑量規格 |
-| frequency | TEXT | 服用頻率 |
-| total_quantity | INTEGER | 總數量 |
-| remaining_quantity | INTEGER | 剩餘數量 |
-| expiry_date | TEXT | 有效期 |
-| start_date | TEXT | 開始服用日期 |
-| notes | TEXT | 備註 |
-
-## 使用範例
-
-### 基本使用
+### 记录每日指标
 
 ```python
 from db_manager import DatabaseManager, DailyMetric
-from datetime import datetime
 
-# 初始化資料庫
-db = DatabaseManager("health_log.db")
+with DatabaseManager("health_log.db") as db:
+    # 增量更新：只覆盖非 NULL 字段，保留已有数据
+    metric = DailyMetric(
+        id=None, date="2026-05-17",
+        systolic_bp=125, diastolic_bp=82, heart_rate=72
+    )
+    db.add_daily_metric(metric)
 
-# 新增今日指標
-today = datetime.now().strftime("%Y-%m-%d")
-metric = DailyMetric(
-    id=None,
-    date=today,
-    systolic_bp=135,
-    diastolic_bp=85,
-    heart_rate=78,
-    fasting_glucose=6.2,
-    sleep_hours=6.5,
-    sleep_quality=3,
-    steps=5000,
-    notes="睡眠不足"
-)
-db.add_daily_metric(metric)
-
-# 查詢最近 30 天趨勢
-bp_trend = db.get_bp_trend(30)
-print(f"最近血壓趨勢: {bp_trend}")
-
-# 關閉連線
-db.close()
+    # 自动预警
+    alerts = db.check_alerts(metric)
+    for a in alerts:
+        print(f"[{a.level}] {a.message}")
 ```
 
-### 使用 with 語句
+### 用药清单制（v3 新增）
 
 ```python
-with DatabaseManager() as db:
-    # 自動管理連線
-    metrics = db.get_recent_metrics(7)
-    for metric in metrics:
-        print(f"{metric.date}: 血壓 {metric.systolic_bp}/{metric.diastolic_bp}")
+with DatabaseManager("health_log.db") as db:
+    # 查看今日用药清单（多时段药物拆分显示）
+    checklist = db.get_daily_med_checklist()
+    print(f"完成率: {checklist['completion_rate']}%")
+    for item in checklist['checklist']:
+        print(f"  [{item['status']}] {item['name']} ({item['schedule_slot']})")
+
+    # 批量记录早间药物
+    db.batch_log_medications(
+        date="2026-05-17", time="06:30",
+        schedule_slot="早",
+        medication_ids=[1, 7]
+    )
+
+    # 记录后自动检查遗漏
+    comp = db.check_medication_completeness()
+    if not comp['is_complete']:
+        print(comp['message'])
 ```
 
-## 開發進度
+### 生成健康仪表盘
 
-- [x] 第一階段：基礎設施與本地資料庫構建
-  - [x] 設計資料庫 Schema
-  - [x] 編寫 db_manager.py 封裝類
+```bash
+python dashboard.py
+# 输出: dashboard.html（固定三区布局）
+```
 
-- [x] 第二階段：多模態解析能力開發
-  - [x] 編寫提示詞模板（`prompts/ocr_template.txt`）
-  - [x] 實現圖片預處理介面（`med_report_analyzer.py`）
-  - [x] 建立預警閾值配置（`config/thresholds.json`）
+仪表盘布局：
+1. **优先区** - 最新指标 + 预警横幅 + 用药完成率
+2. **用药区** - 今日清单(按时段分组) + 依从率进度条
+3. **详情区** - 趋势图 + 就医待办 + 健康日志
 
-- [ ] 第三階段：邏輯判斷與預警引擎
-  - [ ] 設定閾值邏輯
-  - [ ] 編寫健康週報生成邏輯
+## 药物管理字段 (v3 新增)
 
-- [ ] 第四階段：語音化與外部集成
-  - [ ] 集成 TTS
-  - [ ] 配置 OpenClaw Action
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `med_type` | 长期/阶段性/临时处方 | 长期 |
+| `schedule_time` | 服药时段（多选用逗号分隔） | 早,晚 |
+| `end_date` | 疗程结束日期（阶段性用） | 2026-08-15 |
+| `schedule_slot` | 每次记录的时段(v6) | 晚 |
 
-## 預警閾值標準
+## 预警阈值标准
 
-| 指標 | 綠色 | 橙色 | 紅色 |
-|------|------|------|------|
-| 收縮壓 | <120 | 120-139 | ≥140 |
-| 舒張壓 | <80 | 80-89 | ≥90 |
-| 空腹血糖 | <5.6 | 5.6-6.9 | ≥7.0 |
-| 心率 | 60-100 | - | <60 或 >100 |
+基于 `config/thresholds.json`，9 大品类：
 
-## 授權
+| 指标 | 正常 | 轻微 | 中度 | 严重 |
+|------|------|------|------|------|
+| 收缩压 | <120 | 120-139 | 140-159 | ≥160 |
+| 舒张压 | <80 | 80-89 | 90-99 | ≥100 |
+| 空腹血糖 | 3.9-5.5 | 5.6-6.9 | 7.0-11.0 | ≥11.1 |
+| 心率 | 60-100 | 50-59/101-110 | <50/>110 | - |
+
+## 自我进化协议
+
+```
+用户操作 → 记录数据 → 生成洞察 → 提取经验 → 更新记忆 → 改进预警
+```
+
+- 记录指标后自动检查预警和新趋势
+- 服药记录后自动检查完整性遗漏
+- 同类经验出现 5+ 次自动提升为语义记忆模式
+- 三层记忆：语义记忆(规律) + 情景记忆(事件) + 健康规则(约束)
+
+## 授权
 
 MIT License

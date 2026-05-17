@@ -1,8 +1,9 @@
 """
-HealthGuardian - 数据库管理模块 v2
+HealthGuardian - 数据库管理模块 v3
 提供 SQLite 数据库的初始化与基本操作接口
 支持：每日指标、体检记录、药品管理、生活习惯、病史、健康日记、就医计划、服药日志
-新增：版本化迁移、多记忆架构、健康洞察引擎、服药闭环管理
+新增：版本化迁移、多记忆架构、健康洞察引擎、服药闭环管理、用药清单制、完整性检查
+Schema: v6 (medication_logs.schedule_slot, medications.med_type/schedule_time/end_date)
 """
 
 import sqlite3

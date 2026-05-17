@@ -368,9 +368,9 @@ if checklist['missing']:
 
 | 文件 | 用途 |
 |------|------|
-| `db_manager.py` | 数据库管理核心模块 v3（数据类 + CRUD + 预警 + 洞察引擎 + 巡检 + 清单制 + 完整性检查 + 备份/导出） |
+| `db_manager.py` | 数据库管理核心模块 v3 / Schema v6（CRUD + 预警 + 洞察 + 巡检 + 清单制 + 完整性检查 + 备份/导出） |
 | `memory_manager.py` | 记忆管理模块（三层记忆架构 + 经验提取） |
-| `dashboard.py` | HTML 健康仪表盘生成器 v3（固定三区布局 + Chart.js 可视化） |
+| `dashboard.py` | HTML 健康仪表盘生成器 v3（固定三区布局 + Chart.js + XSS 防护 + 阈值统一） |
 | `med_report_analyzer.py` | 图片体检报告解析（PIL预处理 + AI Vision） |
 | `pdf_report_parser.py` | PDF体检报告文本提取解析（PyMuPDF） |
 | `config/thresholds.json` | 预警阈值配置（9大品类） |

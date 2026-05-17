@@ -1,5 +1,6 @@
 # HealthGuardian - 用户数据（绝不可纳入版本控制）
 health_log.db
+health_log_backup.db
 dashboard.html
 
 # 体检报告原件（含个人隐私）
@@ -16,10 +17,19 @@ memory/episodic/*
 backups/
 exports/
 
+# 临时运行脚本和输出（WorkBuddy 自动生成）
+_*.py
+_*.txt
+_*.json
+_check_result.json
+
 # 临时文件
 temp_images/
 __pycache__/
 *.pyc
+
+# WorkBuddy 项目目录
+.workbuddy/
 
 # IDE
 .vscode/
